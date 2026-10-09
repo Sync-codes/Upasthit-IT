@@ -43,6 +43,7 @@ enum Year {
 }
 
 enum AttendanceSessionStatus {
+  NOT_STARTED
   ACTIVE
   COMPLETED
 }
@@ -55,15 +56,17 @@ enum AttendanceStatus {
 // ─── Core Auth Table (UNCHANGED) ─────────────────────────────────────────────
 
 model User {
-  id        String        @id @default(cuid())
-  name      String
-  email     String        @unique
-  password  String
-  role      Role
-  status    AccountStatus @default(PENDING)
-  isActive  Boolean       @default(true)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  name               String
+  email              String        @unique
+  password           String
+  role               Role
+  status             AccountStatus @default(PENDING)
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(false)
+  tokenVersion       Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   // Profile relations (1:1 per role)
   studentProfile     StudentProfile?
@@ -82,7 +85,7 @@ model User {
 model Department {
   id        Int      @id @default(autoincrement())
   code      String   @unique // e.g. "CE", "IT", "ME"
-  name      String           // e.g. "Computer Engineering"
+  name      String // e.g. "Computer Engineering"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -104,7 +107,7 @@ model StudentProfile {
   rollNo           Int?
   enrollmentNo     String?          @unique
   mobileNumber     String?
-  gender           String?          // e.g. "Male", "Female", "Other"
+  gender           String? // e.g. "Male", "Female", "Other"
   enrollmentStatus EnrollmentStatus @default(ACTIVE)
 
   departmentId   Int?
@@ -112,16 +115,16 @@ model StudentProfile {
   departmentCode String // kept for backward compat / Excel import
   departmentName String
 
-  academicYear String  // e.g. "2025-26"
-  semester     Int     // 1–8
+  academicYear String // e.g. "2025-26"
+  semester     Int // 1–8
   division     String? // A, B, C
-  year         Year    // FY, SY, TY, BE
+  year         Year // FY, SY, TY, BE
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   subjectEnrollments StudentSubjectEnrollment[]
-  attendanceRecords AttendanceRecord[]
+  attendanceRecords  AttendanceRecord[]
 
   @@index([departmentId])
   @@index([academicYear, semester])
@@ -213,7 +216,7 @@ model Subject {
 
   academicYear String // e.g. "2025-26"
   semester     Int
-  year         Year  // FY, SY, TY, BE
+  year         Year // FY, SY, TY, BE
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -238,7 +241,7 @@ model FacultySubjectAssignment {
   academicYear String
   division     String? // A, B, C — null means all divisions
 
-  createdAt DateTime @default(now())
+  createdAt          DateTime            @default(now())
   attendanceSessions AttendanceSession[]
 
   @@unique([facultyId, subjectId, academicYear, division])
@@ -278,7 +281,7 @@ model ApprovalLog {
   reviewer   User?   @relation("ReviewerApprovals", fields: [reviewerId], references: [id])
 
   action AccountStatus // APPROVED or REJECTED
-  note   String?       // optional rejection reason
+  note   String? // optional rejection reason
 
   createdAt DateTime @default(now())
 
@@ -286,22 +289,35 @@ model ApprovalLog {
   @@index([reviewerId])
 }
 
+// ─── Attendance Session ───────────────────────────────────────────────────────
+
 model AttendanceSession {
-  id           Int                     @id @default(autoincrement())
-  assignmentId Int
-  academicYear String
-  year         Year
-  division     String
-  sessionDate  DateTime
-  status       AttendanceSessionStatus @default(ACTIVE)
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
+  id                    Int                     @id @default(autoincrement())
+  assignmentId          Int
+  academicYear          String
+  year                  Year
+  division              String
+  sessionDate           DateTime
+  status                AttendanceSessionStatus @default(NOT_STARTED)
+  attendanceType        String?
+  sessionType           String?
+  lectureTime           String?
+  startedAt             DateTime?
+  expiresAt             DateTime?
+  completedAt           DateTime?
+  windowDurationSeconds Int                     @default(300)
+  joinCode              String?                 @unique
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   assignment FacultySubjectAssignment @relation(fields: [assignmentId], references: [id])
   records    AttendanceRecord[]
 
   @@index([assignmentId, sessionDate])
+  @@index([status, expiresAt])
 }
+
+// ─── Attendance Record ────────────────────────────────────────────────────────
 
 model AttendanceRecord {
   id        Int              @id @default(autoincrement())
